@@ -1,0 +1,87 @@
+services:
+  kong:
+    image: kong:3.7
+    ports:
+      - "8080:8000"        # proxy — all API traffic enters here
+      - "8001:8001"        # admin API (read-only in DB-less mode)
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_STATUS_LISTEN: 0.0.0.0:8100     # /metrics lives on this listener
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+    volumes:
+      - ./kong:/kong/declarative:ro
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./api
+    # no ports: — clients (and the loadtest) must go through Kong
+    environment:
+      - DATABASE_URL=Host=db;Database=workshop;Username=postgres;Password=postgres
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: workshop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - kong
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+
+  loadtest:
+    image: alpine/curl:latest
+    volumes:
+      - ./loadtest.sh:/loadtest.sh:ro
+    entrypoint: ["sh", "/loadtest.sh"]
+    depends_on:
+      kong:
+        condition: service_healthy
+    environment:
+      # ${VAR:-default} lets the shell override these:
+      #   V1_WEIGHT=50 V2_WEIGHT=50 docker compose --profile loadtest up loadtest
+      - API_HOST=kong:8000           # traffic goes THROUGH the gateway
+      - V1_WEIGHT=${V1_WEIGHT:-30}
+      - V2_WEIGHT=${V2_WEIGHT:-70}
+      - DURATION_SECONDS=${DURATION_SECONDS:-180}
+      - REQUESTS_PER_SEC=${REQUESTS_PER_SEC:-5}
+    profiles:
+      - loadtest
+
+volumes:
+  pgdata:

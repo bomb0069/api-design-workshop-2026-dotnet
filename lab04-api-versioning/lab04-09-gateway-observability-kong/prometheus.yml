@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  # Scrape KONG, not the API — the gateway observes every request that
+  # passes through it, so the backend needs no /metrics endpoint at all.
+  - job_name: 'kong'
+    static_configs:
+      - targets: ['kong:8100']

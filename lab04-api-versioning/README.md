@@ -16,6 +16,7 @@ Work through the sub-labs in order. Each one builds on concepts introduced in th
 | 06 | [lab04-06-combining-strategies](lab04-06-combining-strategies/) | Combining Multiple Versioning Strategies | Run URL path, query parameter, and header versioning simultaneously. A single request can carry the version in any of the three locations, with a defined precedence order. |
 | 07 | [lab04-07-breaking-changes-and-deprecation](lab04-07-breaking-changes-and-deprecation/) | Breaking Changes and Deprecation | Classify changes as safe, breaking, or context-dependent. Implement `Deprecation` and `Sunset` response headers (RFC 8594), `Link` headers (RFC 8288), and HTTP 410 Gone tombstone responses. |
 | 08 | [lab04-08-version-lifecycle-and-observability](lab04-08-version-lifecycle-and-observability/) | Version Lifecycle and Observability | Full lifecycle management (current, maintained, deprecated, end-of-life) backed by Prometheus metrics and structured logs. Build dashboards showing per-version traffic splits to decide when it is safe to sunset a version. |
+| 09 | [lab04-09-gateway-observability-kong](lab04-09-gateway-observability-kong/) | Version Observability at the Gateway | The same v1/v2 traffic dashboards produced by Kong's prometheus plugin instead of in-app middleware — route names become the version dimension, zero instrumentation code in the backend. |
 
 ## Which Labs Should I Do?
 

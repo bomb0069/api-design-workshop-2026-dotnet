@@ -1,0 +1,34 @@
+# Declarative Kong configuration (DB-less mode).
+#
+# The versioning trick: ONE backend service, but each API version gets its
+# OWN Kong route. Kong's prometheus plugin labels every metric with the
+# route name — so the route becomes the "version" dimension in Grafana,
+# with zero instrumentation code in the backend.
+_format_version: "3.0"
+
+services:
+  - name: products-api
+    url: http://api:8080
+    routes:
+      - name: products-v1          # <-- this name becomes the metric label
+        paths: ["/api/v1"]
+        strip_path: false          # pass the path through unchanged
+      - name: products-v2
+        paths: ["/api/v2"]
+        strip_path: false
+      - name: lifecycle
+        paths: ["/api/lifecycle"]
+        strip_path: false
+      - name: health
+        paths: ["/health"]
+        strip_path: false
+
+# The bundled prometheus plugin, enabled globally. Kong then exposes
+# metrics on its status listener (:8100/metrics — see docker-compose.yml).
+plugins:
+  - name: prometheus
+    config:
+      status_code_metrics: true    # kong_http_requests_total{route,code,...}
+      latency_metrics: true        # kong_{request,upstream,kong}_latency_ms
+      bandwidth_metrics: true
+      upstream_health_metrics: true

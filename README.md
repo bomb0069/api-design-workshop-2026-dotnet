@@ -82,6 +82,7 @@ docker compose down -v
 | 04-06 | [Combining Strategies](lab04-api-versioning/lab04-06-combining-strategies/) | URL + query + header with priority | ✅ |
 | 04-07 | [Breaking Changes](lab04-api-versioning/lab04-07-breaking-changes-and-deprecation/) | Deprecation/Sunset headers, 410 Gone | ✅ |
 | 04-08 | [Lifecycle & Observability](lab04-api-versioning/lab04-08-version-lifecycle-and-observability/) | Prometheus metrics, Grafana dashboards | ✅ |
+| 04-09 | [Gateway Observability](lab04-api-versioning/lab04-09-gateway-observability-kong/) | Version traffic metrics from Kong — no app instrumentation | ✅ |
 
 ---
 
