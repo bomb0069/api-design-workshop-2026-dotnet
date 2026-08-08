@@ -1,0 +1,32 @@
+services:
+  kong:
+    image: kong:3.7
+    ports:
+      - "8080:8000"        # proxy — the public entry point
+      - "8001:8001"        # admin API — inspect gateway state (read-only in DB-less mode)
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    volumes:
+      - ./kong:/kong/declarative:ro
+    depends_on:
+      - users-service
+      - orders-service
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  users-service:
+    build: ./users-service
+    # no ports: — only reachable on the internal Docker network
+
+  orders-service:
+    build: ./orders-service
+    # no ports: — only reachable on the internal Docker network

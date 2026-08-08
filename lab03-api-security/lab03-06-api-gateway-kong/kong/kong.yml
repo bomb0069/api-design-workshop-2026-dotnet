@@ -1,0 +1,79 @@
+# Declarative Kong configuration (DB-less mode).
+# This one file is the entire gateway: services, routes, consumers, plugins.
+_format_version: "3.0"
+
+services:
+  # The service URL includes the backend's path prefix (/users), and routes
+  # strip their matched prefix (strip_path: true) — together that rewrites
+  # /api/users/2 -> /users/2, same as lab03-05's PathPattern transform.
+  - name: users-service
+    url: http://users-service:8081/users
+    routes:
+      - name: users-external
+        paths: ["/api/users"]
+        strip_path: true
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 10
+              policy: local
+              limit_by: consumer
+      - name: users-internal
+        paths: ["/internal/users"]
+        strip_path: true
+        plugins:
+          - name: acl
+            config:
+              allow: ["internal"]
+
+  - name: orders-service
+    url: http://orders-service:8082/orders
+    routes:
+      - name: orders-external
+        paths: ["/api/orders"]
+        strip_path: true
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 10
+              policy: local
+              limit_by: consumer
+      - name: orders-internal
+        paths: ["/internal/orders"]
+        strip_path: true
+        plugins:
+          - name: acl
+            config:
+              allow: ["internal"]
+
+# Global plugins — apply to every route.
+plugins:
+  - name: key-auth
+    config:
+      key_names: ["X-Api-Key"]      # same header as lab03-05
+      hide_credentials: true         # strip the key before proxying upstream
+  - name: correlation-id
+    config:
+      header_name: X-Request-Id
+      generator: uuid
+      echo_downstream: true          # also return the ID to the client
+  - name: cors
+    config:
+      origins: ["http://localhost:3000"]
+      credentials: true
+      exposed_headers: ["X-Request-Id", "RateLimit-Limit", "RateLimit-Remaining"]
+
+# Clients of the gateway. key-auth maps a key to a consumer; ACL groups
+# decide who may use the /internal routes.
+consumers:
+  - username: mobile-app
+    keyauth_credentials:
+      - key: demo-key-mobile
+  - username: partner-web
+    keyauth_credentials:
+      - key: demo-key-partner
+  - username: billing-service
+    keyauth_credentials:
+      - key: internal-secret-key
+    acls:
+      - group: internal
