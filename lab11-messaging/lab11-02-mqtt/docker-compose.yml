@@ -1,0 +1,32 @@
+services:
+  publisher:
+    build: ./publisher
+    environment:
+      MQTT_BROKER: tcp://mosquitto:1883
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  subscriber:
+    build: ./subscriber
+    environment:
+      MQTT_BROKER: tcp://mosquitto:1883
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mosquitto_data:

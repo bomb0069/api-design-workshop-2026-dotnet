@@ -1,0 +1,22 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "50051:50051"
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    depends_on:
+      - server
+
+  grpcui:
+    image: fullstorydev/grpcui
+    ports:
+      - "8080:8080"
+    command: ["-plaintext", "-bind", "0.0.0.0", "-port", "8080", "server:50051"]
+    depends_on:
+      - server

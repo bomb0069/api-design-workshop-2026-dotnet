@@ -1,0 +1,67 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=Host=db;Database=workshop;Username=postgres;Password=postgres
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: workshop
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+
+  loadtest:
+    image: alpine/curl:latest
+    volumes:
+      - ./loadtest.sh:/loadtest.sh:ro
+    entrypoint: ["sh", "/loadtest.sh"]
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      - API_HOST=api:8080
+      - V1_WEIGHT=30
+      - V2_WEIGHT=70
+      - DURATION_SECONDS=180
+      - REQUESTS_PER_SEC=5
+    profiles:
+      - loadtest
+
+volumes:
+  pgdata:
