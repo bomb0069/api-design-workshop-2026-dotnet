@@ -33,7 +33,7 @@ Same architecture, same backends, same behavior:
 | Identity to backend | you inject `X-Client-Name` | Kong injects `X-Consumer-Username` |
 | Credential stripping | you remove `X-Api-Key` | `hide_credentials: true` |
 | Internal vs external | route metadata + middleware check | `acl` plugin with consumer groups |
-| Rate limiting | `PartitionedRateLimiter` you wired | `rate-limiting` plugin (`limit_by: consumer`) |
+| Rate limiting | `PartitionedRateLimiter` you wired | `rate-limiting` plugin (`limit_by` decides the scope) |
 | Correlation ID | middleware generating `X-Request-Id` | `correlation-id` plugin |
 | CORS | ASP.NET CORS middleware | `cors` plugin |
 
@@ -41,7 +41,36 @@ The backends are the same two services as lab03-05 with one change: they read Ko
 
 ## API Keys
 
-Same keys as lab03-05: `demo-key-mobile` (mobile-app), `demo-key-partner` (partner-web) — external, 10 requests/minute each; `internal-secret-key` (billing-service) — member of the `internal` ACL group, may call `/internal/*`.
+Same keys as lab03-05: `demo-key-mobile` (mobile-app), `demo-key-partner` (partner-web) — external; `internal-secret-key` (billing-service) — member of the `internal` ACL group, may call `/internal/*`.
+
+## Rate Limit Scope in Kong: `limit_by` + plugin placement
+
+Mirroring lab03-05, the two backends demonstrate the two scopes. In Kong the scope is a **configuration choice**, controlled by two things: `limit_by` (who shares a counter) and *where the plugin is attached* (which requests it covers).
+
+**Config to config:**
+
+```yaml
+# PER-CONSUMER (fairness) — users-service          # GLOBAL (capacity) — orders-service
+# plugin on the ROUTE, counted per consumer:       # plugin on the SERVICE, one counter for all:
+routes:                                            services:
+  - name: users-external                             - name: orders-service
+    paths: ["/api/users"]                              url: http://orders-service:8082/orders
+    plugins:                                           plugins:
+      - name: rate-limiting                              - name: rate-limiting
+        config:                                            config:
+          minute: 10        # 10/min                         second: 10        # 10/s = 600/min
+          policy: local                                      policy: local
+          limit_by: consumer  # <-- WHO:                     limit_by: service   # <-- WHO:
+                              #     each client                                  #     everyone
+                              #     has its own                                  #     shares one
+                              #     counter                                      #     counter
+```
+
+Two knobs, two different effects:
+
+- **`limit_by`** — `consumer` gives every authenticated client its own counter; `service` counts all traffic to the service together (global); `ip` would give per-source-IP counters (the lab03-02 model), no auth needed.
+- **Plugin placement** — a plugin on a *route* covers just that route (each instance keeps its own counter); on a *service* it covers **all** routes of that service with **one shared counter** (here: `/api/orders` *and* `/internal/orders` drain the same 10 req/s — internal traffic counts toward capacity, exactly like lab03-05); attached globally it would cover every route in the gateway.
+- **Windows** — `second`, `minute`, `hour`, `day` are all first-class config keys; `second: 10` is the same average rate as `minute: 600` but never admits a 600-request burst.
 
 ## Run It
 
@@ -78,14 +107,25 @@ curl -i -H "X-Api-Key: demo-key-mobile" http://localhost:8080/internal/orders
 curl -s -H "X-Api-Key: internal-secret-key" http://localhost:8080/internal/orders   # 200
 ```
 
-**5. Rate limit — Kong sends standard `RateLimit-*` headers, then 429:**
+**5. Per-consumer rate limit on `/api/users` — Kong sends standard `RateLimit-*` headers, then 429:**
 
 ```bash
 for i in $(seq 1 11); do
   curl -s -o /dev/null -w "%{http_code} " -H "X-Api-Key: demo-key-partner" http://localhost:8080/api/users
 done; echo
-# {"message":"API rate limit exceeded", ...} on the 11th
+# {"message":"API rate limit exceeded", ...} on the 11th — but demo-key-mobile still gets 200s
 ```
+
+**5b. GLOBAL rate limit on orders (10 req/s shared by everyone):**
+
+```bash
+for i in $(seq 1 6); do curl -s -o /dev/null -w "%{http_code} " -H "X-Api-Key: demo-key-mobile"  http://localhost:8080/api/orders; done
+for i in $(seq 1 6); do curl -s -o /dev/null -w "%{http_code} " -H "X-Api-Key: demo-key-partner" http://localhost:8080/api/orders; done; echo
+```
+
+Two different consumers, twelve rapid requests — once 10 land inside the same second, the rest get 429, because `limit_by: service` makes them drain **one shared counter**. The internal key on `/internal/orders` counts against the same counter. Wait a second and it recovers.
+
+> **Bucket vs window:** Kong's `rate-limiting` plugin is a **fixed-window counter** (10 per wall-clock second), not a token bucket like the .NET limiter in lab03-05 — so if your loop happens to straddle a second boundary you may see all 200s; run it again or add a couple more requests. (Kong's `rate-limiting-advanced` in the enterprise tier does sliding windows.)
 
 **6. Explore the gateway through the Admin API:**
 

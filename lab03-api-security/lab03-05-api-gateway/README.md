@@ -58,7 +58,47 @@ The gateway uses [YARP](https://microsoft.github.io/reverse-proxy/) (Yet Another
 | `demo-key-partner` | partner-web | external |
 | `internal-secret-key` | billing-service | internal |
 
-External keys work on `/api/*` routes and share a rate-limit budget of **10 requests/minute** (token bucket: 10 burst, 1 token per 6 s). The internal key also unlocks `/internal/*` routes and is **not** rate limited — a common pattern: strict edge controls for public consumers, lighter controls for trusted service-to-service traffic.
+External keys work on `/api/*` routes. The internal key also unlocks `/internal/*` routes — a common pattern: strict edge controls for public consumers, lighter controls for trusted service-to-service traffic.
+
+## Rate Limit Policies: per-client vs global
+
+Each route declares its policy in `appsettings.json` metadata (`"RateLimitPolicy"`), and the gateway middleware picks the matching limiter:
+
+| Policy | Who shares the bucket | Question it answers | Used on |
+|--------|----------------------|--------------------|---------|
+| `per-client` | each authenticated client has its own (10 req/**min**; internal exempt) | **Fairness** — no client may hog the API | `/api/users` |
+| `global` | *everyone together*, internal included (10 req/**s** = 600 req/min) | **Capacity** — orders-service can only take so much load | `/api/orders`, `/internal/orders` |
+
+**Code to code** — both live in `gateway/Program.cs`. The difference is *partitioned by client* vs *one shared bucket*, and *per-minute* vs *per-second*:
+
+```csharp
+// PER-CLIENT (fairness): a bucket FACTORY —          // GLOBAL (capacity): ONE bucket object —
+// each distinct clientName gets its own bucket.      // every request drains the same instance.
+var rateLimiter =                                     var globalCapacityLimiter =
+    PartitionedRateLimiter.Create<string, string>(        new TokenBucketRateLimiter(
+        clientName =>                                         new TokenBucketRateLimiterOptions
+        RateLimitPartition.GetTokenBucketLimiter(             {
+            clientName,        // <-- WHO: per key            TokenLimit = 10,       // burst
+            _ => new TokenBucketRateLimiterOptions            TokensPerPeriod = 10,  // 10 back...
+            {                                                 ReplenishmentPeriod =
+                TokenLimit = 10,                                  TimeSpan.FromSeconds(1), // ...per s
+                TokensPerPeriod = 1,   // 1 back...           QueueLimit = 0,
+                ReplenishmentPeriod =                         AutoReplenishment = true,
+                    TimeSpan.FromSeconds(6), // ...per 6s // });
+                QueueLimit = 0,                           // = 600 req/min TOTAL, all clients
+                AutoReplenishment = true,                 //   + internal traffic combined
+            }));
+// = 10 req/min EACH client, internal exempt
+```
+
+And in the middleware, acquiring differs the same way:
+
+```csharp
+// per-client: which bucket depends on who calls     // global: no "who" — same bucket always
+rateLimiter.AcquireAsync(clientName, 1);             globalCapacityLimiter.AttemptAcquire(1);
+```
+
+The rate is `TokensPerPeriod / ReplenishmentPeriod`, so per-second, per-minute, or per-hour windows are all expressible; a per-second window also smooths bursts (600/min arriving in one burst can hurt even if the average is fine). Note the deliberate difference in who is counted: fairness limits exempt trusted internal traffic, capacity limits count **everything** — the database doesn't care who the query came from. Responses carry `X-RateLimit-Policy` so you can see which policy handled the request.
 
 ## Run It
 
@@ -103,13 +143,24 @@ curl -s -X POST http://localhost:8080/api/orders \
   -d '{"item": "Monitor", "amount": 7990}'
 ```
 
-**6. Burn through the rate limit (11th request within a minute → 429):**
+**6. Burn through the per-client rate limit (11th request within a minute → 429):**
 
 ```bash
 for i in $(seq 1 11); do
   curl -s -o /dev/null -w "%{http_code} " -H "X-Api-Key: demo-key-mobile" http://localhost:8080/api/users
 done; echo
 ```
+
+`demo-key-partner` still gets 200s on `/api/users` — per-client buckets are independent.
+
+**6b. The GLOBAL limit on `/api/orders` — different keys share ONE bucket:**
+
+```bash
+for i in $(seq 1 6); do curl -s -o /dev/null -w "%{http_code} " -H "X-Api-Key: demo-key-mobile"  http://localhost:8080/api/orders; done
+for i in $(seq 1 6); do curl -s -o /dev/null -w "%{http_code} " -H "X-Api-Key: demo-key-partner" http://localhost:8080/api/orders; done; echo
+```
+
+Twelve rapid requests from **two different clients**: the last ones get `429 {"error":"server at capacity, retry later"}` because both clients drain the same 10 req/s bucket (even the internal key counts here — try it on `/internal/orders/`). Wait a second and it recovers.
 
 **7. Backends are unreachable directly (the whole point):**
 
@@ -131,8 +182,9 @@ orders-service-1 | [orders-service] GET /orders -> 200 client=partner-web rid=3f
 | Single entry point | Only `gateway` has a `ports:` mapping in docker-compose |
 | Centralized auth | API key middleware in `gateway/Program.cs`; backends have zero auth code |
 | Identity propagation | Gateway strips `X-Api-Key`, injects `X-Client-Name` |
-| Centralized rate limiting | One token bucket per client across *all* backends |
+| Centralized rate limiting | Per-client buckets (fairness) on `/api/users`; one global bucket (capacity, 10 req/s) on orders routes |
 | Internal vs external | Route metadata `AuthClass` in `appsettings.json` |
+| Policy per route | Route metadata `RateLimitPolicy`: `per-client` or `global` |
 | Path rewriting | `PathSet` / `PathPattern` transforms in the route table |
 | Correlation ID | `X-Request-Id` created at the edge, logged by every service |
 
@@ -143,6 +195,6 @@ A gateway is not free: it adds a network hop, is a single point of failure (run 
 ## Exercises
 
 1. **Add a third backend** — a `products-service` with `GET /products`. Add its cluster and routes to `appsettings.json` (external only). No gateway code changes should be needed — that's the point of a config-driven route table.
-2. **Per-route rate limits** — give `/api/orders` a stricter budget than `/api/users` (hint: partition the rate limiter by `clientName + routeId` and read the route's `RateLimit` metadata, like `AuthClass`).
+2. **Layer the policies** — production gateways usually enforce *both*: make orders routes check the global capacity bucket **and** the per-client fairness bucket, so one client can't consume the whole 10 req/s capacity by itself.
 3. **Key rotation** — add a second key for `mobile-app` that maps to the same client name. Confirm both keys share one rate-limit bucket (partitioning is by client, not by key).
 4. **JWT at the edge** — replace API keys on the external routes with the JWT validation from lab03-01: validate the token at the gateway and forward the username as `X-User-Name`.

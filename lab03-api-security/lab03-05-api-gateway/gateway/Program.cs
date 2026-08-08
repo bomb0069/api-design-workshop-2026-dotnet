@@ -25,6 +25,19 @@ var rateLimiter = PartitionedRateLimiter.Create<string, string>(clientName =>
         QueueLimit = 0,
     }));
 
+// GLOBAL limiter: ONE bucket shared by every caller — internal services
+// included. This is capacity protection, not fairness: "orders-service can
+// handle ~600 req/min", written per second (10 tokens refilled every 1 s).
+// Routes opt into it with "RateLimitPolicy": "global" in their metadata.
+var globalCapacityLimiter = new TokenBucketRateLimiter(new TokenBucketRateLimiterOptions
+{
+    TokenLimit = 10,                                  // burst: 10 at once
+    TokensPerPeriod = 10,                             // refill 10 tokens...
+    ReplenishmentPeriod = TimeSpan.FromSeconds(1),    // ...every second = 600/min
+    AutoReplenishment = true,
+    QueueLimit = 0,
+});
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddReverseProxy()
@@ -105,10 +118,35 @@ app.MapReverseProxy(proxyPipeline =>
     });
 
     // --- Centralized rate limiting ----------------------------------------
-    // External clients share one budget across all backends. Internal
-    // service-to-service traffic is not rate limited.
+    // Each route picks its policy via "RateLimitPolicy" metadata:
+    //   "per-client" (default) — every authenticated client has its own
+    //       bucket (10/min), shared across all per-client routes. Internal
+    //       traffic is exempt: this policy is about fairness between clients.
+    //   "global" — ONE bucket for everyone, internal included (10 req/s).
+    //       This policy is about protecting backend capacity.
     proxyPipeline.Use(async (context, next) =>
     {
+        var route = context.GetReverseProxyFeature().Route.Config;
+        var policy = route.Metadata?.GetValueOrDefault("RateLimitPolicy") ?? "per-client";
+
+        if (policy == "global")
+        {
+            using var lease = globalCapacityLimiter.AttemptAcquire(1);
+            context.Response.Headers["X-RateLimit-Policy"] = "global";
+            context.Response.Headers["X-RateLimit-Limit"] = "10";
+            if (!lease.IsAcquired)
+            {
+                context.Response.Headers["X-RateLimit-Remaining"] = "0";
+                context.Response.Headers["Retry-After"] = "1";
+                context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                await context.Response.WriteAsJsonAsync(new { error = "server at capacity, retry later" });
+                return;
+            }
+            await next();
+            return;
+        }
+
+        // per-client policy — internal service-to-service traffic is exempt
         if (context.Items["IsInternal"] is true)
         {
             await next();
@@ -116,10 +154,11 @@ app.MapReverseProxy(proxyPipeline =>
         }
 
         var clientName = (string)context.Items["ClientName"]!;
-        using var lease = await rateLimiter.AcquireAsync(clientName, 1, context.RequestAborted);
+        using var clientLease = await rateLimiter.AcquireAsync(clientName, 1, context.RequestAborted);
 
+        context.Response.Headers["X-RateLimit-Policy"] = "per-client";
         context.Response.Headers["X-RateLimit-Limit"] = "10";
-        if (!lease.IsAcquired)
+        if (!clientLease.IsAcquired)
         {
             context.Response.Headers["X-RateLimit-Remaining"] = "0";
             context.Response.Headers["Retry-After"] = "6";

@@ -26,18 +26,24 @@ services:
             config:
               allow: ["internal"]
 
+  # orders-service uses a GLOBAL rate limit: the plugin sits at the SERVICE
+  # level (one counter covering BOTH routes below), and limit_by: service
+  # counts every caller together — internal consumers included. This models
+  # backend capacity ("orders can take ~600 req/min"), written per second.
+  # Compare with users-service above: route-level plugin, limit_by: consumer
+  # = fairness between clients instead.
   - name: orders-service
     url: http://orders-service:8082/orders
+    plugins:
+      - name: rate-limiting
+        config:
+          second: 10          # 10 req/s = 600 req/min, shared by everyone
+          policy: local
+          limit_by: service
     routes:
       - name: orders-external
         paths: ["/api/orders"]
         strip_path: true
-        plugins:
-          - name: rate-limiting
-            config:
-              minute: 10
-              policy: local
-              limit_by: consumer
       - name: orders-internal
         paths: ["/internal/orders"]
         strip_path: true

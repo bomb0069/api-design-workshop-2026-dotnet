@@ -48,6 +48,18 @@ done
 
 You should see `200` for the first 10 requests and `429` for the remaining ones.
 
+### Test the GLOBAL limit
+
+`/reports/summary` uses a different policy: one shared bucket for **all callers together** (see [Rate Limit Scope](#rate-limit-scope-per-ip-vs-global) below) at 10 requests per **second**:
+
+```bash
+for i in $(seq 1 15); do
+  curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/reports/summary
+done; echo
+```
+
+The first 10 return `200`, the rest `429` — and unlike `/products`, a second machine hitting the endpoint at the same time would make the limit trip *sooner*, because everyone drains the same bucket. Wait one second and 10 more tokens are available. The response carries `X-RateLimit-Policy: global` so you can tell which policy fired.
+
 ## Test CORS
 
 Send a preflight OPTIONS request from an allowed origin:
@@ -105,6 +117,72 @@ var rateLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
 ### Per-IP Bucketing
 
 `PartitionedRateLimiter` maintains a separate `TokenBucketRateLimiter` per partition key -- here, the client's IP address. Each IP gets its own independent bucket, so one client hitting the limit does not affect others.
+
+### Rate Limit Scope: per-IP vs per-client vs Global
+
+"10 requests per minute" is only half a rate-limit rule. The other half is **who shares the counter** — the *scope*. Same bucket options, three very different behaviors:
+
+| Scope | One bucket per… | Question it answers | Weakness |
+|-------|----------------|--------------------| ---------|
+| **per-IP** | source IP address | fairness between anonymous callers | many users behind one NAT share a bucket; one attacker with many IPs gets many buckets |
+| **per-client** | authenticated identity (API key / user) | fairness between known clients | needs authentication first |
+| **global** | *(no partitioning — one bucket total)* | total capacity of the server | one noisy caller can starve everyone (it's not meant to be fair) |
+
+**Code to code — the only real difference is the partition key.** The bucket options are identical in all three; watch the first argument:
+
+```csharp
+// 1) PER-IP — partition key = the caller's IP address.
+//    1,000 IPs → 1,000 independent buckets → up to 10,000 req/min total!
+var perIp = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+    RateLimitPartition.GetTokenBucketLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",   // <-- key: WHO
+        _ => bucketOptions));
+
+// 2) PER-CLIENT — partition key = the authenticated identity.
+//    Same shape, different key. Two API keys of one client can share a
+//    bucket; one user on two IPs still gets ONE bucket. (Used in lab03-05.)
+var perClient = PartitionedRateLimiter.Create<string, string>(clientName =>
+    RateLimitPartition.GetTokenBucketLimiter(
+        clientName,                                                    // <-- key: WHO
+        _ => bucketOptions));
+
+// 3) GLOBAL — no partitioning at all: one bucket object, everyone drains it.
+//    (Equivalent: a partitioned limiter whose key is a constant like "global".)
+var global = new TokenBucketRateLimiter(bucketOptions);
+```
+
+So: per-IP and per-client are the *same mechanism* pointed at a different notion of "who"; global removes the "who" entirely. That also changes the math — per-IP/per-client caps each caller but total load grows with the number of callers, while global caps total load but says nothing about fairness.
+
+**Per-second windows** work the same way in all three — the rate is just `TokensPerPeriod / ReplenishmentPeriod`:
+
+```csharp
+// 10 req/min (this lab's per-IP limit):        // 600 req/min = 10 req/s (the global limit):
+new TokenBucketRateLimiterOptions               new TokenBucketRateLimiterOptions
+{                                               {
+    TokenLimit = 10,                                TokenLimit = 10,      // burst: 10 at once
+    TokensPerPeriod = 1,                            TokensPerPeriod = 10, // 10 tokens back...
+    ReplenishmentPeriod =                           ReplenishmentPeriod =
+        TimeSpan.FromSeconds(6),                        TimeSpan.FromSeconds(1), // ...per second
+    QueueLimit = 0,                                 QueueLimit = 0,
+    AutoReplenishment = true                        AutoReplenishment = true
+};                                              };
+```
+
+600/min and 10/s are the same *average* rate but different burst behavior: with a 1-second window the server never sees more than ~10 requests in any instant, while a per-minute window would tolerate the whole 600 arriving at once.
+
+In this lab `/reports/summary` (an "expensive" aggregation) opts out of the per-IP middleware with `.DisableRateLimiting()` and acquires from the global bucket by hand:
+
+```csharp
+app.MapGet("/reports/summary", async (HttpContext context, NpgsqlDataSource db) =>
+{
+    using var lease = globalCapacityLimiter.AttemptAcquire(1);
+    if (!lease.IsAcquired)
+        return Results.Json(new ErrorResponse("Server is at capacity. Try again later."), statusCode: 429);
+    return await ProductHandlers.Summary(db);
+}).DisableRateLimiting();
+```
+
+Real systems usually **layer both**: a generous global limit protecting capacity, plus per-client limits enforcing fairness within it. (The gateway labs 03-05/03-06 show the same two policies enforced at the edge for whole services.)
 
 ### Rejection Handling
 
