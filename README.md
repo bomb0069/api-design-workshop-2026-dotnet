@@ -64,6 +64,7 @@ docker compose down -v
 |---|-----|-------------|--------|
 | 03-01 | [Authentication](lab03-api-security/lab03-01-authentication/) | JWT tokens, password hashing, auth middleware | ✅ |
 | 03-02 | [Rate Limiting & CORS](lab03-api-security/lab03-02-rate-limiting-and-cors/) | .NET rate limiting middleware, CORS headers | ✅ |
+| 03-05 | [API Gateway](lab03-api-security/lab03-05-api-gateway/) | YARP reverse proxy — centralized auth, rate limiting, routing | ✅ |
 
 #### Group 04: [API Versioning](lab04-api-versioning/)
 

@@ -1,0 +1,16 @@
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "8080:8080"        # the ONLY service reachable from outside
+    depends_on:
+      - users-service
+      - orders-service
+
+  users-service:
+    build: ./users-service
+    # no ports: — only reachable on the internal Docker network
+
+  orders-service:
+    build: ./orders-service
+    # no ports: — only reachable on the internal Docker network
