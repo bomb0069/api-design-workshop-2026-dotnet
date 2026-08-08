@@ -73,12 +73,14 @@ This starts 4 services:
 ### Generate traffic manually
 
 ```bash
-# V1 traffic
-for i in $(seq 1 10); do curl -s http://localhost:8080/api/v1/products > /dev/null; done
+# V1 traffic (prints one status code per request so you can SEE it working)
+for i in $(seq 1 10); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/api/v1/products; done; echo
 
 # V2 traffic
-for i in $(seq 1 20); do curl -s http://localhost:8080/api/v2/products > /dev/null; done
+for i in $(seq 1 20); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/api/v2/products; done; echo
 ```
+
+You should see a row of `200`s. Then check the version split in Prometheus (`sum by (version) (rate(api_requests_total[1m]))`) or the Grafana dashboard — requests appear under the `v1`/`v2` labels.
 
 ### Run the Load Test
 

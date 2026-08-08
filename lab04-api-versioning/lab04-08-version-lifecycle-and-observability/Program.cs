@@ -47,5 +47,9 @@ app.MapMetrics(); // /metrics endpoint
 // Structured logging middleware
 app.UseMiddleware<StructuredLogMiddleware>();
 
+// Health endpoint — the loadtest container polls this before starting,
+// and it mirrors the Go edition's /health.
+app.MapGet("/health", () => Results.Json(new { status = "ok" }));
+
 app.MapControllers();
 app.Run("http://0.0.0.0:8080");

@@ -24,7 +24,16 @@ public class PrometheusVersionMiddleware
         await _next(context);
         sw.Stop();
 
-        var version = context.GetRequestedApiVersion()?.ToString() ?? "unknown";
+        // Count ONLY versioned API requests, labeled "v1"/"v2" — matching the
+        // Go edition (which attaches this middleware inside /api/v1 and
+        // /api/v2 only) and the Grafana dashboard's version="v1|v2" queries.
+        // Unversioned paths (/metrics, /health, /api/lifecycle) are skipped so
+        // they don't pollute the traffic-share denominators.
+        var requested = context.GetRequestedApiVersion();
+        if (requested is null)
+            return;
+
+        var version = $"v{requested.MajorVersion}";
         var endpoint = context.Request.Path.Value ?? "/";
         var method = context.Request.Method;
         var status = context.Response.StatusCode.ToString();

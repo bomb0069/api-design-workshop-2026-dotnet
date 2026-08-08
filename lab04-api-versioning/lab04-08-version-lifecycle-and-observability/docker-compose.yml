@@ -55,11 +55,13 @@ services:
       api:
         condition: service_started
     environment:
+      # ${VAR:-default} lets the shell override these:
+      #   V1_WEIGHT=50 V2_WEIGHT=50 docker compose --profile loadtest up loadtest
       - API_HOST=api:8080
-      - V1_WEIGHT=30
-      - V2_WEIGHT=70
-      - DURATION_SECONDS=180
-      - REQUESTS_PER_SEC=5
+      - V1_WEIGHT=${V1_WEIGHT:-30}
+      - V2_WEIGHT=${V2_WEIGHT:-70}
+      - DURATION_SECONDS=${DURATION_SECONDS:-180}
+      - REQUESTS_PER_SEC=${REQUESTS_PER_SEC:-5}
     profiles:
       - loadtest
 

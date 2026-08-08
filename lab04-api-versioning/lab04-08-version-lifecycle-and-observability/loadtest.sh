@@ -69,10 +69,12 @@ echo ""
 
 # ---------------------------------------------------------------------------
 # Helper: pick a random number between 1 and 100
-# Uses /dev/urandom since $RANDOM is not available in plain sh
+# Uses /dev/urandom since $RANDOM is not available in plain sh.
+# Read 2 bytes (0-65535) and reduce modulo 100 — reading 1 byte (0-255)
+# would skew every weight (e.g. "<= 50" would fire ~20% of the time).
 # ---------------------------------------------------------------------------
 random_1_to_100() {
-    od -An -tu1 -N1 /dev/urandom | tr -d ' '
+    echo $(( $(od -An -tu2 -N2 /dev/urandom | tr -d ' ') % 100 + 1 ))
 }
 
 # ---------------------------------------------------------------------------
