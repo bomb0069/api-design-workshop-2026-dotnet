@@ -1,4 +1,4 @@
-# Lab 04 - CRUD In-Memory
+# Lab 01-03: CRUD In-Memory
 
 Build a complete CRUD (Create, Read, Update, Delete) REST API backed by a thread-safe in-memory data store. This lab covers every fundamental operation you need when working with resources in a REST API.
 

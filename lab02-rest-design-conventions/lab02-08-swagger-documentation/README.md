@@ -1,4 +1,4 @@
-# Lab 08 - Swagger Documentation
+# Lab 02-08: Swagger Documentation
 
 ## Learning Objectives
 

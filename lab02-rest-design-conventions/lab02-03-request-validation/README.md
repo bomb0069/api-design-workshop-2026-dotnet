@@ -1,4 +1,4 @@
-# Lab 06 - Request Validation
+# Lab 02-03: Request Validation
 
 Learn how to validate incoming request bodies in an ASP.NET Core REST API using explicit, rule-based validation that returns structured, field-level error messages.
 

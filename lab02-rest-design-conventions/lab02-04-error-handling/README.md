@@ -1,4 +1,4 @@
-# Lab 07 - Error Handling
+# Lab 02-04: Error Handling
 
 ## Learning Objectives
 

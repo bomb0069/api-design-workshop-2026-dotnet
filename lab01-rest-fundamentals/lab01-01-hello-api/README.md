@@ -1,4 +1,4 @@
-# Lab 01 - Hello API
+# Lab 01-01: Hello API
 
 ## Learning Objectives
 

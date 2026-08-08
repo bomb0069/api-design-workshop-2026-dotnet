@@ -1,4 +1,4 @@
-# Lab 13 - File Upload & Download
+# Lab 01-05: File Upload & Download
 
 Build a REST API that handles file uploads and downloads using MinIO as S3-compatible object storage, with file metadata tracked in PostgreSQL.
 

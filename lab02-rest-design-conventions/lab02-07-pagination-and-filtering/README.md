@@ -1,4 +1,4 @@
-# Lab 09 - Pagination and Filtering
+# Lab 02-07: Pagination and Filtering
 
 Build a REST API that supports pagination, filtering, and sorting for a product catalog backed by PostgreSQL.
 

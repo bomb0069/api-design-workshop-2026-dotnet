@@ -1,4 +1,4 @@
-# Lab 03 - Path Parameters
+# Lab 02-02: Path and Query Parameters
 
 ## Learning Objectives
 
@@ -11,7 +11,7 @@
 
 - .NET SDK 8.0 or later installed
 - Docker and Docker Compose installed
-- Completion of Lab 02 or equivalent understanding of basic HTTP handlers and JSON responses
+- Completion of Lab 01-02 or equivalent understanding of basic HTTP handlers and JSON responses
 - A terminal and a tool for making HTTP requests (curl, Postman, or a browser)
 
 ## Getting Started
