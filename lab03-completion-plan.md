@@ -8,7 +8,7 @@ Goal: complete the API Security learning path so it covers identity, traffic con
 |---|-----|--------|--------|
 | 03-01 | Authentication | ✅ | JWT, password hashing, auth middleware |
 | 03-02 | Rate Limiting & CORS | ✅ | per-IP + global token buckets, CORS |
-| 03-03 | Sensitive Data Handling | ❌ **this plan** | masking, field-level security, log scrubbing |
+| 03-03 | Sensitive Data Handling | ✅ | masking, field-level security, log scrubbing |
 | 03-04 | API Key Management | ❌ **this plan** | key lifecycle: create → rotate → revoke |
 | 03-05 | API Gateway (YARP) | ✅ | centralized auth/limits, per-client vs global |
 | 03-06 | API Gateway (Kong) | ✅ | same gateway as configuration |
@@ -23,13 +23,13 @@ Suggested learning order after completion: 01 (who are you) → 02 (how much may
 
 Scope (from the workshop gap-analysis plan):
 
-- [ ] Demo API: `users` + `payments` resources with realistic PII (email, phone, card number, national id)
-- [ ] Response masking helpers: `card: "****1234"`, `email: "j***@example.com"`, phone masking
-- [ ] Field-level security by role: the SAME endpoint returns public / internal / admin views (role from JWT claim, reusing the lab03-01 token format)
-- [ ] Log-scrubbing middleware: request/response logging that redacts configured fields (password, token, card) — prove it by grepping the logs
-- [ ] Rules section in README: secrets never in URLs, never in logs, don't over-expose ("return what the client needs, not the row")
-- [ ] Exercise: PII classification table + "find the leak" broken endpoint to fix
-- [ ] docker-compose (in-memory store is fine — the lesson is in the response shaping), build + runtime verify, README
+- [x] Demo API: `users` + `payments` resources with realistic PII (email, phone, card number, national id)
+- [x] Response masking helpers: `card: "****1234"`, `email: "j***@example.com"`, phone masking
+- [x] Field-level security by role: the SAME endpoint returns public / internal / admin views (role from JWT claim, reusing the lab03-01 token format)
+- [x] Log-scrubbing middleware: request/response logging that redacts configured fields (password, token, card) — prove it by grepping the logs
+- [x] Rules section in README: secrets never in URLs, never in logs, don't over-expose ("return what the client needs, not the row")
+- [x] Exercise: PII classification table + "find the leak" broken endpoint to fix
+- [x] docker-compose (in-memory store is fine — the lesson is in the response shaping), build + runtime verify, README
 
 ## lab03-04: API Key Management
 
