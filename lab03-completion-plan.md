@@ -9,10 +9,10 @@ Goal: complete the API Security learning path so it covers identity, traffic con
 | 03-01 | Authentication | ✅ | JWT, password hashing, auth middleware |
 | 03-02 | Rate Limiting & CORS | ✅ | per-IP + global token buckets, CORS |
 | 03-03 | Sensitive Data Handling | ✅ | masking, field-level security, log scrubbing |
-| 03-04 | API Key Management | ❌ **this plan** | key lifecycle: create → rotate → revoke |
+| 03-04 | API Key Management | ✅ | key lifecycle: create → rotate → revoke |
 | 03-05 | API Gateway (YARP) | ✅ | centralized auth/limits, per-client vs global |
 | 03-06 | API Gateway (Kong) | ✅ | same gateway as configuration |
-| 03-07 | Request Signing (HMAC-SHA256) | ❌ **this plan** | integrity + replay protection |
+| 03-07 | Request Signing (HMAC-SHA256) | ✅ | integrity + replay protection |
 | 03-08 | OWASP API Top 10 Tour | ❌ optional | vulnerable-vs-fixed endpoint pairs |
 
 Suggested learning order after completion: 01 (who are you) → 02 (how much may you call) → 03 (what may you see) → 04 (how credentials live and die) → 05/06 (enforce it all at the edge) → 07 (prove the message wasn't forged).
@@ -35,27 +35,27 @@ Scope (from the workshop gap-analysis plan):
 
 Scope (from the workshop gap-analysis plan):
 
-- [ ] Postgres `api_keys` table: `key_hash` (SHA-256 — never store raw keys), `client_name`, `scopes`, `created_at`, `expires_at`, `revoked_at`
-- [ ] Admin endpoints: `POST /admin/keys` (returns the raw key ONCE), `POST /admin/keys/{id}/rotate`, `DELETE /admin/keys/{id}` (revoke)
-- [ ] Key auth middleware: `Authorization: ApiKey <key>` header (never in URL), hash → lookup → expiry/revocation check
-- [ ] Dual-key rotation: rotating issues a new key while the old one keeps a grace period (e.g. 24 h) — zero-downtime rotation story
-- [ ] Scopes: e.g. `read:products` vs `write:products`, enforced per endpoint (403 on missing scope)
-- [ ] Per-key rate limiting (reuse the lab03-02 partitioned limiter, keyed by key id)
-- [ ] Audit trail: `api_key_usage` log table (key id, route, status, timestamp) + `GET /admin/keys/{id}/usage`
-- [ ] docker-compose with Postgres, build + runtime verify (full lifecycle in curl), README
+- [x] Postgres `api_keys` table: `key_hash` (SHA-256 — never store raw keys), `client_name`, `scopes`, `created_at`, `expires_at`, `revoked_at`
+- [x] Admin endpoints: `POST /admin/keys` (returns the raw key ONCE), `POST /admin/keys/{id}/rotate`, `DELETE /admin/keys/{id}` (revoke)
+- [x] Key auth middleware: `Authorization: ApiKey <key>` header (never in URL), hash → lookup → expiry/revocation check
+- [x] Dual-key rotation: rotating issues a new key while the old one keeps a grace period (e.g. 24 h) — zero-downtime rotation story
+- [x] Scopes: e.g. `read:products` vs `write:products`, enforced per endpoint (403 on missing scope)
+- [x] Per-key rate limiting (reuse the lab03-02 partitioned limiter, keyed by key id)
+- [x] Audit trail: `api_key_usage` log table (key id, route, status, timestamp) + `GET /admin/keys/{id}/usage`
+- [x] docker-compose with Postgres, build + runtime verify (full lifecycle in curl), README
 
 ## lab03-07: Request Signing with HMAC-SHA256
 
 Scope (proposed — the client-to-API counterpart of lab09-01's webhook signing):
 
-- [ ] `api/` — validates `X-Signature` = HMAC-SHA256(secret, `METHOD\nPATH\nX-Timestamp\nBODY`), constant-time compare (`CryptographicOperations.FixedTimeEquals`)
-- [ ] Replay protection: reject `X-Timestamp` older/newer than 5 min; README exercise adds a nonce cache
-- [ ] `client/` — console app that signs correctly, printing the string-to-sign at each step
-- [ ] Failure-mode demos: missing signature (401), wrong secret (401), tampered body (401), stale timestamp (401), valid (200)
-- [ ] Hand-verifiable: README shows the same signature computed with `openssl dgst -sha256 -hmac`
-- [ ] README: API key vs HMAC comparison table (secret never travels, tamper-proof body, replay resistance); pointer to real-world versions (AWS SigV4, Stripe)
-- [ ] Exercise: move verification into the lab03-05 gateway
-- [ ] docker-compose, build + runtime verify, README
+- [x] `api/` — validates `X-Signature` = HMAC-SHA256(secret, `METHOD\nPATH\nX-Timestamp\nBODY`), constant-time compare (`CryptographicOperations.FixedTimeEquals`)
+- [x] Replay protection: reject `X-Timestamp` older/newer than 5 min; README exercise adds a nonce cache
+- [x] `client/` — console app that signs correctly, printing the string-to-sign at each step
+- [x] Failure-mode demos: missing signature (401), wrong secret (401), tampered body (401), stale timestamp (401), valid (200)
+- [x] Hand-verifiable: README shows the same signature computed with `openssl dgst -sha256 -hmac`
+- [x] README: API key vs HMAC comparison table (secret never travels, tamper-proof body, replay resistance); pointer to real-world versions (AWS SigV4, Stripe)
+- [x] Exercise: move verification into the lab03-05 gateway
+- [x] docker-compose, build + runtime verify, README
 
 ## lab03-08 (optional): OWASP API Security Top 10 Tour
 
@@ -65,7 +65,7 @@ Scope (proposed — the client-to-API counterpart of lab09-01's webhook signing)
 
 ## Wrap-up (after labs land)
 
-- [ ] Update group README table + root README (mark ✅)
+- [x] Update group README table + root README (mark ✅)
 - [ ] Check off items in this file as they complete; delete or archive the file when the group is done
 - [ ] Optional follow-up: port 03-03/03-04/03-07 to the Go repo for parity
 

@@ -65,8 +65,10 @@ docker compose down -v
 | 03-01 | [Authentication](lab03-api-security/lab03-01-authentication/) | JWT tokens, password hashing, auth middleware | ✅ |
 | 03-02 | [Rate Limiting & CORS](lab03-api-security/lab03-02-rate-limiting-and-cors/) | .NET rate limiting middleware, CORS headers | ✅ |
 | 03-03 | [Sensitive Data Handling](lab03-api-security/lab03-03-sensitive-data/) | Masking, field-level security by role, log scrubbing | ✅ |
+| 03-04 | [API Key Management](lab03-api-security/lab03-04-api-key-management/) | Key lifecycle — create, rotate with grace period, revoke, scopes, audit | ✅ |
 | 03-05 | [API Gateway](lab03-api-security/lab03-05-api-gateway/) | YARP reverse proxy — centralized auth, rate limiting, routing | ✅ |
 | 03-06 | [API Gateway with Kong](lab03-api-security/lab03-06-api-gateway-kong/) | Kong (DB-less) — the same gateway as configuration, not code | ✅ |
+| 03-07 | [Request Signing](lab03-api-security/lab03-07-request-signing/) | HMAC-SHA256 signed requests — integrity + replay protection | ✅ |
 
 #### Group 04: [API Versioning](lab04-api-versioning/)
 
@@ -120,7 +122,7 @@ docker compose down -v
 Part 1: REST API
   Group 01  →  Fundamentals (Hello API → CRUD → File handling)
   Group 02  →  Design Conventions (Params, Validation, Errors, Docs)
-  Group 03  →  Security (Auth, Rate Limiting & CORS)
+  Group 03  →  Security (Auth, Limits, Data Protection, Keys, Gateways, Signing)
   Group 04  →  Versioning (URL, Header, Query, Deprecation, Observability)
         ↓
 Part 2: Beyond REST
