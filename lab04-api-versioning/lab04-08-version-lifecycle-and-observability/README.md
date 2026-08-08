@@ -53,6 +53,84 @@ Log aggregators can answer "give me every unique client still calling v1".
 
 Tag every span with `api.version` and `client.id`. This helps answer: "Are v1 callers experiencing higher latency than v2?"
 
+## Code Walkthrough: The Metrics Middleware
+
+All version metrics come from one small middleware — `Middleware/PrometheusVersionMiddleware.cs` (registered in `Program.cs` with `app.UseMiddleware<PrometheusVersionMiddleware>()`, before `MapControllers`). It has three jobs: **define the metrics**, **time every request**, and **attach the right labels**.
+
+### 1. Define the metrics (once, statically)
+
+```csharp
+private static readonly Counter RequestCounter = Metrics.CreateCounter(
+    "api_requests_total",                // metric name you query in PromQL
+    "Total API requests",
+    new CounterConfiguration { LabelNames = new[] { "version", "endpoint", "method", "status" } });
+
+private static readonly Histogram RequestDuration = Metrics.CreateHistogram(
+    "api_request_duration_seconds",
+    "Request duration in seconds",
+    new HistogramConfiguration { LabelNames = new[] { "version", "endpoint", "method" } });
+```
+
+Two metric types, two different questions:
+
+- **Counter** (`api_requests_total`) — only ever goes up. Prometheus turns it into traffic *rates* with `rate(...)`; you never read the raw number directly.
+- **Histogram** (`api_request_duration_seconds`) — records each duration into buckets, which is what lets the dashboard compute average latency per version (`_sum / _count`) and percentiles later.
+
+They're `static readonly` because a metric must be created **once per process** — the middleware instance may be constructed per pipeline, but all requests must increment the *same* counter series.
+
+### 2. Time the request by wrapping `await _next`
+
+```csharp
+public async Task InvokeAsync(HttpContext context)
+{
+    var sw = Stopwatch.StartNew();
+    await _next(context);          // run the REST of the pipeline (routing, controller, DB…)
+    sw.Stop();                     // whatever time passed is this request's duration
+    ...
+}
+```
+
+This is the standard middleware sandwich: everything **before** `await _next` happens on the way in, everything **after** happens on the way out — at which point the response status code is known and the stopwatch holds the full end-to-end duration for this request.
+
+### 3. Attach the labels (the part the dashboard depends on)
+
+```csharp
+// Count ONLY versioned API requests, labeled "v1"/"v2" — matching the
+// Grafana dashboard's version="v1|v2" queries.
+var requested = context.GetRequestedApiVersion();   // from Asp.Versioning
+if (requested is null)
+    return;                                          // /metrics, /health, /api/lifecycle: not counted
+
+var version = $"v{requested.MajorVersion}";          // 1.0 -> "v1", 2.0 -> "v2"
+var endpoint = context.Request.Path.Value ?? "/";
+var method  = context.Request.Method;
+var status  = context.Response.StatusCode.ToString();
+
+RequestCounter.WithLabels(version, endpoint, method, status).Inc();
+RequestDuration.WithLabels(version, endpoint, method).Observe(sw.Elapsed.TotalSeconds);
+```
+
+Three details here carry the whole lab:
+
+- **`GetRequestedApiVersion()`** is how the middleware knows which version served the request — Asp.Versioning parsed it from the URL during routing, so the middleware works no matter which versioning strategy (path/query/header) is in play.
+- **The label value must match the dashboard.** Grafana queries `version="v1"` — so the code must emit `v1`, not `1.0`. A mismatch here is silent: nothing errors, the panels just show *No data* (this exact bug existed in an earlier version of this lab).
+- **Unversioned paths are skipped.** If `/metrics` and `/health` were counted (e.g. as `version="unknown"`), they would inflate the denominator of the traffic-share panels: `sum(rate(api_requests_total{version="v1"})) / sum(rate(api_requests_total))` would never reach 100% across v1+v2.
+
+### A word on label cardinality
+
+Every distinct label combination becomes its own time series in Prometheus. This lab labels by raw `endpoint` path, which is safe only because the ID space is tiny (3 seeded products). In production, label by **route template** (`/api/v1/products/{id}`), never by raw path — otherwise `/products/1`, `/products/2`, … `/products/999999` each become a separate series and Prometheus memory explodes. That is also why there is no `user_id` label: high-cardinality questions ("which clients still call v1?") belong to structured logs, not metrics.
+
+### From labels to dashboard
+
+The two Grafana gauges are just this pipeline seen end-to-end:
+
+```
+middleware label            PromQL on the dashboard
+version="v2"       ─────▶   sum(rate(api_requests_total{version="v2"}[1m]))
+                            ─────────────────────────────────────────────── × 100
+all versioned reqs ─────▶   sum(rate(api_requests_total[1m]))
+```
+
 ## Getting Started
 
 ```bash
