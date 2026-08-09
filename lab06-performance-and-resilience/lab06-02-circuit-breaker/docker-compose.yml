@@ -1,0 +1,14 @@
+services:
+  api:
+    build: ./api
+    ports:
+      - "8080:8080"
+    environment:
+      - DOWNSTREAM_URL=http://downstream:8081
+    depends_on:
+      - downstream
+
+  downstream:
+    build: ./downstream
+    ports:
+      - "8081:8081"    # exposed so you can break it on purpose: POST /admin/mode/{ok|fail|slow}

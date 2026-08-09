@@ -84,6 +84,13 @@ docker compose down -v
 | 04-08 | [Lifecycle & Observability](lab04-api-versioning/lab04-08-version-lifecycle-and-observability/) | Prometheus metrics, Grafana dashboards | ✅ |
 | 04-09 | [Gateway Observability](lab04-api-versioning/lab04-09-gateway-observability-kong/) | Version traffic metrics from Kong — no app instrumentation | ✅ |
 
+#### Group 06: [Performance & Resilience](lab06-performance-and-resilience/)
+
+| # | Lab | Description | Status |
+|---|-----|-------------|--------|
+| 06-01 | Caching with Redis | Cache-aside, TTL, invalidation, HTTP cache headers | ⏳ |
+| 06-02 | [Circuit Breaker](lab06-performance-and-resilience/lab06-02-circuit-breaker/) | Closed/Open/Half-Open states, fallbacks, liveness vs readiness health checks | ✅ |
+
 ---
 
 ### Part 2: Beyond REST
@@ -125,6 +132,7 @@ Part 1: REST API
   Group 02  →  Design Conventions (Params, Validation, Errors, Docs)
   Group 03  →  Security (Auth, Limits, Data Protection, Keys, Gateways, Signing)
   Group 04  →  Versioning (URL, Header, Query, Deprecation, Observability)
+  Group 06  →  Performance & Resilience (Caching, Circuit Breaker, Health Checks)
         ↓
 Part 2: Beyond REST
   Group 08  →  GraphQL
