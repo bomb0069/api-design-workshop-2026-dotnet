@@ -1,0 +1,77 @@
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # Jaeger UI
+
+  # ---------------------------------------------------------------------------
+  # The two application services. Note: NO observability configuration at all.
+  # No OTel env vars, no agents, no instrumentation packages in the images.
+  # ---------------------------------------------------------------------------
+  product-service:
+    build: ./product-service
+    ports:
+      - "8081:8080"
+
+  order-service:
+    build: ./order-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - product-service
+
+  # ---------------------------------------------------------------------------
+  # Beyla sidecars — one per service. Each joins the target container's PID
+  # namespace (pid: "service:<name>") so its eBPF probes can see the target
+  # process. `privileged: true` is required to load eBPF programs; on newer
+  # kernels a finer-grained capability set (CAP_BPF, CAP_SYS_PTRACE,
+  # CAP_NET_RAW, CAP_PERFMON, CAP_DAC_READ_SEARCH, CAP_CHECKPOINT_RESTORE)
+  # can replace it — see the README.
+  # ---------------------------------------------------------------------------
+  beyla-order:
+    image: grafana/beyla:1.9
+    pid: "service:order-service"
+    privileged: true
+    environment:
+      - BEYLA_OPEN_PORT=8080
+      - OTEL_SERVICE_NAME=order-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      # Inject/read the W3C traceparent at the eBPF level so spans from both
+      # services join into one distributed trace — without any code changes.
+      - BEYLA_BPF_CONTEXT_PROPAGATION=all
+      # Expose RED metrics for Prometheus to scrape.
+      - BEYLA_PROMETHEUS_PORT=8999
+      # Uncomment to print every captured trace to the container log (debug):
+      # - BEYLA_TRACE_PRINTER=text
+    depends_on:
+      - order-service
+      - jaeger
+
+  beyla-product:
+    image: grafana/beyla:1.9
+    pid: "service:product-service"
+    privileged: true
+    environment:
+      - BEYLA_OPEN_PORT=8080
+      - OTEL_SERVICE_NAME=product-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+      - BEYLA_BPF_CONTEXT_PROPAGATION=all
+      - BEYLA_PROMETHEUS_PORT=8999
+      # - BEYLA_TRACE_PRINTER=text
+    depends_on:
+      - product-service
+      - jaeger
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - beyla-order
+      - beyla-product

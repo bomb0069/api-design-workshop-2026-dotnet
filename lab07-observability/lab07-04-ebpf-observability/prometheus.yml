@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  # Beyla exposes RED metrics (rate, errors, duration) for the service it
+  # watches on the port set by BEYLA_PROMETHEUS_PORT. The application
+  # containers themselves expose no metrics endpoint at all.
+  - job_name: beyla-order
+    static_configs:
+      - targets: ["beyla-order:8999"]
+  - job_name: beyla-product
+    static_configs:
+      - targets: ["beyla-product:8999"]

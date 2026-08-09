@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  # Scrape the OTel Collector's prometheus exporter. The apps push OTLP to
+  # the collector; Prometheus pulls from the collector — the apps never talk
+  # to Prometheus directly.
+  - job_name: otel-collector
+    # honor_labels keeps the job/instance labels the collector derives from
+    # each service's OTel resource (job="order-service", job="product-service")
+    # instead of overwriting them with job="otel-collector".
+    honor_labels: true
+    static_configs:
+      - targets: ["otel-collector:8889"]

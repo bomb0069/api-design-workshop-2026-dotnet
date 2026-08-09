@@ -1,0 +1,43 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+
+  loadtest:
+    image: alpine/curl:latest
+    volumes:
+      - ./loadtest.sh:/loadtest.sh:ro
+    entrypoint: ["sh", "/loadtest.sh"]
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      # ${VAR:-default} lets the shell override these:
+      #   DURATION_SECONDS=300 REQUESTS_PER_SEC=10 docker compose --profile loadtest up loadtest
+      - API_HOST=api:8080
+      - DURATION_SECONDS=${DURATION_SECONDS:-180}
+      - REQUESTS_PER_SEC=${REQUESTS_PER_SEC:-5}
+    profiles:
+      - loadtest

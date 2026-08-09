@@ -91,6 +91,16 @@ docker compose down -v
 | 06-01 | Caching with Redis | Cache-aside, TTL, invalidation, HTTP cache headers | ⏳ |
 | 06-02 | [Circuit Breaker](lab06-performance-and-resilience/lab06-02-circuit-breaker/) | Closed/Open/Half-Open states, fallbacks, liveness vs readiness health checks | ✅ |
 
+#### Group 07: [Observability](lab07-observability/)
+
+| # | Lab | Description | Status |
+|---|-----|-------------|--------|
+| 07-01 | [Structured Logging](lab07-observability/lab07-01-structured-logging/) | JSON logs, correlation IDs, runtime log levels | ✅ |
+| 07-02 | [Metrics](lab07-observability/lab07-02-metrics/) | Prometheus + Grafana, the RED method (Rate, Errors, Duration) | ✅ |
+| 07-03 | [Distributed Tracing](lab07-observability/lab07-03-distributed-tracing/) | OpenTelemetry SDK + Jaeger — spans, `traceparent` propagation across services | ✅ |
+| 07-04 | [eBPF Observability](lab07-observability/lab07-04-ebpf-observability/) | Zero-code traces & RED metrics with Grafana Beyla (eBPF) | ✅ |
+| 07-05 | [Unified Observability](lab07-observability/lab07-05-unified-observability/) | OTel Collector → Prometheus + Loki + Tempo, correlated by `trace_id` in Grafana | ✅ |
+
 ---
 
 ### Part 2: Beyond REST
@@ -133,6 +143,7 @@ Part 1: REST API
   Group 03  →  Security (Auth, Limits, Data Protection, Keys, Gateways, Signing)
   Group 04  →  Versioning (URL, Header, Query, Deprecation, Observability)
   Group 06  →  Performance & Resilience (Caching, Circuit Breaker, Health Checks)
+  Group 07  →  Observability (Logging, Metrics, Tracing — OTel & eBPF)
         ↓
 Part 2: Beyond REST
   Group 08  →  GraphQL

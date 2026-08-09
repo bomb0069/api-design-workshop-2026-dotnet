@@ -1,0 +1,11 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Flip the minimum log level WITHOUT rebuilding the image.
+      # Double underscore (__) maps to the ':' separator of appsettings.json,
+      # so this overrides Logging:LogLevel:Default.
+      # Try changing it to Debug or Warning, then `docker compose up` again.
+      Logging__LogLevel__Default: Information

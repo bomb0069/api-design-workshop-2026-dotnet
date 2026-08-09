@@ -1,0 +1,60 @@
+# All three datasources provisioned in one file — plus the correlation links
+# between them. This file is what turns three separate backends into ONE
+# observability experience.
+apiVersion: 1
+
+datasources:
+  # 1. Metrics
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+
+  # 2. Traces — with trace -> logs correlation (tracesToLogsV2).
+  #    Every span view gets a "Logs for this span" button that runs the
+  #    custom Loki query below, joining on the span's service + trace_id.
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        # Widen the log search window around the span, so logs written just
+        # before/after the span's own timestamps are still found.
+        spanStartTimeShift: "-5m"
+        spanEndTimeShift: "5m"
+        # Map the span's service.name resource attribute to Loki's
+        # service_name label (OTLP ingestion turns dots into underscores).
+        tags:
+          - key: service.name
+            value: service_name
+        # With Loki's native OTLP ingestion the trace id is stored as
+        # STRUCTURED METADATA (a field named trace_id), not as text inside
+        # the log line — so we filter on the field instead of using the
+        # default |= line filter (filterByTraceID), which would match nothing.
+        customQuery: true
+        query: '{$${__tags}} | trace_id=`$${__trace.traceId}`'
+
+  # 3. Logs — with logs -> trace correlation (derivedFields).
+  #    Every log record that carries a trace_id field gets a clickable
+  #    "View trace" link that opens that exact trace in Tempo.
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # matcherType "label" (Grafana >= 10.3) matches a label or structured
+        # metadata field by NAME — no regex over the log line needed, because
+        # OTLP-ingested logs store trace_id as structured metadata.
+        - name: TraceID
+          matcherType: label
+          matcherRegex: trace_id
+          url: "$${__value.raw}"
+          datasourceUid: tempo
+          urlDisplayLabel: "View trace"
