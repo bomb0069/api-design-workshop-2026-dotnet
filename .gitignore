@@ -14,3 +14,7 @@ obj/
 
 # Local env
 *.env
+
+# Presentation working files (PDF export in slide/ is the committed artifact)
+*.pptx
+~$*
